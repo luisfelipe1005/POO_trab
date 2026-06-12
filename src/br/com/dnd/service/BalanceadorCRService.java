@@ -355,4 +355,27 @@ public class BalanceadorCRService {
 
         return Math.round(valor);
     }
+
+    public int[] obterStatusBasePorCR(float cr) {
+        int indice = encontrarIndiceCR(cr);
+        
+        // Se digitar um CR que não existe, retorna nulo para a tela tratar
+        if (indice == -1) return null;
+
+        int hpMedio = HP[indice];
+        int caMedio = (CA[indice][0] + CA[indice][1]) / 2;
+        int bonusAtaqueMedio = (BONUS_ATAQUE[indice][0] + BONUS_ATAQUE[indice][1]) / 2;
+
+        // Bônus de Proficiência padrão de D&D 5e: (CR / 4) + 1 (arredondado para baixo, mínimo 2)
+        int proficiencia = Math.max(2, ((int) cr / 4) + 1);
+        
+        // Descobrindo qual deveria ser o Modificador do Atributo principal do monstro
+        int modAtributo = bonusAtaqueMedio - proficiencia;
+        
+        // Convertendo o modificador no valor do atributo (ex: mod +3 = atributo 16)
+        int valorAtributoBase = 10 + (modAtributo * 2);
+
+        // Retorna: [0] = HP, [1] = CA, [2] = Atributo Principal Alto
+        return new int[]{hpMedio, caMedio, valorAtributoBase};
+    }
 }
