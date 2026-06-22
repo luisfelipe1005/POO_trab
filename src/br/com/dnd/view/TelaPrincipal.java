@@ -16,6 +16,7 @@ public class TelaPrincipal extends JFrame {
     private JTextArea areaTextoFichas;
     private JTable tabelaMonstros;
     private DefaultTableModel tableModel;
+    private JTextField txtBusca;
 
     public TelaPrincipal() {
         setTitle("Bestiário D&D - Grimório");
@@ -26,15 +27,34 @@ public class TelaPrincipal extends JFrame {
 
         // --- PAINEL DIVIDIDO (MASTER-DETAIL) ---
         
-        // Esquerda: Tabela de Monstros
+        // Esquerda: Painel que contém a Busca + Tabela
+        JPanel painelEsquerda = new JPanel(new BorderLayout());
+
+        // Barra de Busca
+        JPanel painelBusca = new JPanel(new BorderLayout(5, 0));
+        painelBusca.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        painelBusca.add(new JLabel("🔍 Buscar:"), BorderLayout.WEST);
+        
+        txtBusca = new JTextField();
+        // O evento de teclado (KeyAdapter) faz a mágica de buscar a cada letra digitada!
+        txtBusca.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyReleased(java.awt.event.KeyEvent evt) {
+                atualizarTabela();
+            }
+        });
+        painelBusca.add(txtBusca, BorderLayout.CENTER);
+        painelEsquerda.add(painelBusca, BorderLayout.NORTH);
+
+        // Tabela
         String[] colunas = {"Nome", "CR", "HP", "CA"};
         tableModel = new DefaultTableModel(colunas, 0) {
             @Override
-            public boolean isCellEditable(int row, int column) { return false; } // Impede edição direta
+            public boolean isCellEditable(int row, int column) { return false; }
         };
         tabelaMonstros = new JTable(tableModel);
         tabelaMonstros.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         JScrollPane scrollTabela = new JScrollPane(tabelaMonstros);
+        painelEsquerda.add(scrollTabela, BorderLayout.CENTER);
 
         // Direita: Ficha do Monstro
         areaTextoFichas = new JTextArea();
@@ -43,9 +63,9 @@ public class TelaPrincipal extends JFrame {
         areaTextoFichas.setBackground(new Color(253, 245, 230)); // Corzinha de pergaminho de livro!
         JScrollPane scrollFicha = new JScrollPane(areaTextoFichas);
 
-        // Divisor da tela
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, scrollTabela, scrollFicha);
-        splitPane.setDividerLocation(350); // Largura da tabela
+        // Divisor da tela (Atenção: mude de scrollTabela para painelEsquerda)
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, painelEsquerda, scrollFicha);
+        splitPane.setDividerLocation(350);
         add(splitPane, BorderLayout.CENTER);
 
         // --- AÇÃO DE CLICAR NA TABELA ---
@@ -102,15 +122,63 @@ public class TelaPrincipal extends JFrame {
         });
 
         // O botão de Análise que fizemos antes
-        btnAnalisar.addActionListener(e -> {
+btnAnalisar.addActionListener(e -> {
             int linha = tabelaMonstros.getSelectedRow();
             if (linha == -1) {
                 JOptionPane.showMessageDialog(this, "Selecione um monstro na tabela para analisar!");
                 return;
             }
-            // Coloque aqui a chamada para o seu BalanceadorCRService 
-            // (Passando o monstro selecionado da mesma forma que fizemos no código de remover)
-            JOptionPane.showMessageDialog(this, "A funcionalidade de Análise de CR entrará em ação aqui!");
+            
+            // Pega o nome do monstro selecionado na JTable
+            String nomeSelecionado = (String) tableModel.getValueAt(linha, 0);
+            
+            try {
+                EntidadeRPG monstro = service.buscarMonstro(nomeSelecionado);
+                BalanceadorCRService balanceador = new BalanceadorCRService();
+                
+                float crCalculado = balanceador.calcularCRReal(monstro);
+                float crImaginado = monstro.getCr();
+
+                // Se o cálculo bateu certinho com o esperado
+                if (Math.abs(crCalculado - crImaginado) < 0.01) {
+                    JOptionPane.showMessageDialog(this, 
+                        "Ficha Perfeita!\nO monstro está perfeitamente balanceado para o CR " + (int)crImaginado + ".", 
+                        "Análise Concluída", JOptionPane.INFORMATION_MESSAGE);
+                } else {
+                    // Se houver desbalanceamento, abre o menu de 3 opções
+                    String mensagem = "Desbalanceamento Detectado!\n\n"
+                            + "CR Declarado: " + (int)crImaginado + "\n"
+                            + "CR Real Calculado (Média): " + (int)crCalculado + "\n\n"
+                            + "O que você deseja fazer?";
+
+                    String[] opcoes = {
+                        "Manter como está", 
+                        "Corrigir apenas o CR para " + (int)crCalculado, 
+                        "Balancear a ficha para CR " + (int)crImaginado
+                    };
+                    
+                    int escolha = JOptionPane.showOptionDialog(this, mensagem, "Calculadora de CR",
+                            JOptionPane.DEFAULT_OPTION, java.awt.TrayIcon.MessageType.WARNING.ordinal(), 
+                            null, opcoes, opcoes[0]);
+
+                    if (escolha == 1) { 
+                        // Opção: Corrigir apenas o CR textual
+                        monstro.setCr(crCalculado);
+                        atualizarTabela();
+                        areaTextoFichas.setText(monstro.formatarFicha());
+                        JOptionPane.showMessageDialog(this, "O nível do monstro foi alterado para CR " + (int)crCalculado + "!");
+                        
+                    } else if (escolha == 2) { 
+                        // Opção: Ajustar os números da ficha para caber no CR pretendido original
+                        balanceador.forcarBalanceamento(monstro);
+                        atualizarTabela();
+                        areaTextoFichas.setText(monstro.formatarFicha());
+                        JOptionPane.showMessageDialog(this, "Sucesso! Vida, CA e Ataques reajustados para o CR " + (int)crImaginado + ".");
+                    }
+                }
+            } catch (MonstroNaoEncontradoException ex) {
+                JOptionPane.showMessageDialog(this, ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+            }
         });
 
         btnSalvar.addActionListener(e -> {
@@ -133,10 +201,16 @@ public class TelaPrincipal extends JFrame {
         });
     }
 
-    // Alimenta a JTable com os dados da lista polimórfica
+    // Alimenta a JTable com os dados filtrados
     private void atualizarTabela() {
         tableModel.setRowCount(0); // Limpa a tabela
-        List<EntidadeRPG> lista = service.listarTodos();
+        
+        // Pega o que o usuário digitou na barra de busca (se a barra já existir)
+        String termo = (txtBusca != null) ? txtBusca.getText() : "";
+        
+        // Chama o nosso método novo do Service!
+        List<EntidadeRPG> lista = service.filtrarMonstrosPorNome(termo);
+        
         for (EntidadeRPG m : lista) {
             tableModel.addRow(new Object[]{m.getNome(), m.getCr(), m.getHpBase(), m.getCa()});
         }

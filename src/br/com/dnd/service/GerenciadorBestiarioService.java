@@ -31,6 +31,26 @@ public class GerenciadorBestiarioService {
         throw new MonstroNaoEncontradoException("O monstro '" + nome + "' não foi encontrado no bestiário.");
     }
 
+
+    // Adicione este método junto com os outros (buscar, listarTodos, etc.)
+    public List<EntidadeRPG> filtrarMonstrosPorNome(String termoBusca) {
+        // Se a busca estiver vazia, retorna a lista completa
+        if (termoBusca == null || termoBusca.trim().isEmpty()) {
+            return listarTodos();
+        }
+
+        List<EntidadeRPG> filtrados = new ArrayList<>();
+        String termoLowerCase = termoBusca.toLowerCase();
+
+        for (EntidadeRPG m : bestiario) {
+            // Verifica se o nome do monstro contém o trecho digitado
+            if (m.getNome().toLowerCase().contains(termoLowerCase)) {
+                filtrados.add(m);
+            }
+        }
+        return filtrados;
+    }
+
     public void removerMonstro(String nome) throws MonstroNaoEncontradoException {
         EntidadeRPG m = buscarMonstro(nome);
         bestiario.remove(m);
